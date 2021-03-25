@@ -1,0 +1,15 @@
+---
+title: "{{companyName}} {{formType}}"
+date: {{currentDatetime | formatStringTime(inputformat='%Y%m%d-%H%M%S',outputFormat='%Y-%m-%dT%H:%M:%S')}}
+image: "{{IMAGE_FILE}}"
+draft: true
+companies: "{{companyName | trim(".")}}"
+industry: "{{companyIndustry | trim(".")}}"
+tags: ["{{companyName}}","{{companyIndustry}}","{{dateFiled | formatStringTime}}","{{formType}}"]
+forms: "{{formType}}"
+---
+{{companyName}}, which is in the {{companyIndustry | title}} {{companySicCode}} industry, SEC {{formType}} filing on {{dateFiled | formatStringTime(outputFormat="%B %d %Y")}} had {{totalWordsCleaned}} (cleaned) words - {{NUM_UTILIZED_WORDS}} were utilized for the visualizations.
+
+Top Words:
+{% for key, value in topWords.items() %}{{loop.index}}. {{key}} - {{value}} instances
+{% endfor %}
