@@ -5,31 +5,30 @@ from urllib.parse import urljoin
 import time
 from os import getenv
 START_TIME = time.perf_counter()
-
-
-SUPPORTED_FORMS = ["10-K","S-1"]
+# Number of visualizations to create on a daily run
+# There seems to be ~100 daily between the form types which seem excessive
 DAILY_LIMIT = int(getenv("DAILY_LIMIT","10"))
-SEC_BASE_URL = "https://www.sec.gov/"
-RECENT_FORMS_URL = urljoin(SEC_BASE_URL,"cgi-bin/current?q1=0&q2=6&q3=")
-
-#print(RECENT_FORMS_URL)
 
 #makes call to the url provided, and returns soup with lxml parser
-secIndexSoup = helpers.makeCallReturnSoup(RECENT_FORMS_URL)
-#print(secIndexSoup)
+secIndexSoup = helpers.getDailySoup()
 
+# grab only the links to the supported document types index pages and transform them into the corresponding .txt page
+# shuffles the list 
+dailyForms = helpers.parseDailyForms(secIndexSoup)
 
-#grab only the links to the supported document types index pages and transform them into the corresponding .txt page
-dailyForms = [urljoin(SEC_BASE_URL, atag['href']).replace("-index.html",".txt") for atag in secIndexSoup.find_all('a',href=True) if "-index.html" in atag['href'] and atag.text in SUPPORTED_FORMS]
-helpers.shuffleList(dailyForms)
-for f in range(DAILY_LIMIT):
+formListIndex, processedForms = 0, []
+# stop when processed the daily limit or stop there are not more forms to analyze
+while len(processedForms) <  DAILY_LIMIT and formListIndex < len(dailyForms):
     try:
-        filingData = helpers.analyzeForm(dailyForms[f])
+        formUrl = dailyForms[formListIndex]
+        formListIndex += 1
+        filingData = helpers.analyzeForm(formUrl, processedForms)
         helpers.createWordCloud(filingData)
         helpers.saveFilingData(filingData)
         helpers.generateTemplate(filingData)
+        processedForms.append((filingData["companyName"], filingData["formType"]))
     except Exception as e:
-        print(f"Something did not go quite right with {dailyForms[f]}: {e}")
+        print(f"Something did not go quite right with {formUrl}: {e}")
         continue
 END_TIME = time.perf_counter()
-print(f"Processed {DAILY_LIMIT} forms in {END_TIME - START_TIME:0.4f} seconds")
+print(f"Processed {len(processedForms)} forms in {END_TIME - START_TIME:0.4f} seconds")

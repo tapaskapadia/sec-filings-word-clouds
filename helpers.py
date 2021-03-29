@@ -6,6 +6,7 @@ import os
 import glob
 import random
 import json
+from math import floor
 from PIL import Image
 from datetime import datetime 
 from urllib.parse import urljoin
@@ -15,12 +16,19 @@ from collections import Counter
 from wordcloud import WordCloud, STOPWORDS, ImageColorGenerator
 from jinja2 import Environment, FileSystemLoader
 
+SEC_BASE_URL = "https://www.sec.gov/"
 # Have Checked these 2 form types but do not see why it would break on others
 SUPPORTED_FORMS = ["10-K","S-1"]
 # Uninteresting words to filter out 
 STOP_WORDS = ["a", "about", "above", "after", "again", "against", "ain", "all", "am", "an", "and", "any", "are", "aren", "aren't", "as", "at", "be", "because", "been", "before", "being", "below", "between", "both", "but", "by", "can", "couldn", "couldn't", "d", "did", "didn", "didn't", "do", "does", "doesn", "doesn't", "doing", "don", "don't", "down", "during", "each", "few", "for", "from", "further", "had", "hadn", "hadn't", "has", "hasn", "hasn't", "have", "haven", "haven't", "having", "he", "her", "here", "hers", "herself", "him", "himself", "his", "how", "i", "if", "in", "into", "is", "isn", "isn't", "it", "it's", "its", "itself", "just", "ll", "m", "ma", "me", "mightn", "mightn't", "more", "most", "mustn", "mustn't", "my", "myself", "needn", "needn't", "no", "nor", "not", "now", "o", "of", "off", "on", "once", "only", "or", "other", "our", "ours", "ourselves", "out", "over", "own", "re", "s", "same", "shan", "shan't", "she", "she's", "should", "should've", "shouldn", "shouldn't", "so", "some", "such", "t", "than", "that", "that'll", "the", "their", "theirs", "them", "themselves", "then", "there", "these", "they", "this", "those", "through", "to", "too", "under", "until", "up", "ve", "very", "was", "wasn", "wasn't", "we", "were", "weren", "weren't", "what", "when", "where", "which", "while", "who", "whom", "why", "will", "with", "won", "won't", "wouldn", "wouldn't", "y", "you", "you'd", "you'll", "you're", "you've", "your", "yours", "yourself", "yourselves", "could", "he'd", "he'll", "he's", "here's", "how's", "i'd", "i'll", "i'm", "i've", "let's", "ought", "she'd", "she'll", "that's", "there's", "they'd", "they'll", "they're", "they've", "we'd", "we'll", "we're", "we've", "what's", "when's", "where's", "who's", "why's", "would"]
 # The more words in the cloud the longer it takes to generate
 MAX_WORDS_IN_CLOUD = int(os.getenv("MAX_WORDS_IN_CLOUD","600"))
+# Rule J of the 10-K form allows asset backed security companies to omit many sections
+# so there is not good data.
+SKIP_ASSET_BACKED_SECURITIES_10K = True
+# Skip if the same company and same form type was used in the same day
+SKIP_SAME_COMPANY_SAME_FORM = True
+
 
 OUT_IMG_PATH = os.getenv("WORD_CLOUD_OUTPUT_PATH","./generatedImages/")
 OUT_FILING_PATH = os.getenv("OUT_FILING_PATH","./filingData/")
@@ -56,6 +64,15 @@ def tagVisible(element):
         return False
     return True
 
+def getDailySoup():
+    recentFormsUrl = urljoin(SEC_BASE_URL,"cgi-bin/current?q1=0&q2=6&q3=")
+    return makeCallReturnSoup(recentFormsUrl)
+
+def parseDailyForms(soup):
+    dailyList = [urljoin(SEC_BASE_URL, atag['href']).replace("-index.html",".txt") for atag in soup.find_all('a',href=True) if "-index.html" in atag['href'] and atag.text in SUPPORTED_FORMS]
+    shuffleList(dailyList)
+    return dailyList
+
 def parseSecHeader(soup):
     try:
         formObject = {}
@@ -65,6 +82,10 @@ def parseSecHeader(soup):
         companyIndustryRaw = re.search("STANDARD INDUSTRIAL CLASSIFICATION:(.*)(\[.*)", secHeaderText)
         if companyIndustryRaw:
             formObject["companyIndustry"] = companyIndustryRaw.group(1).strip()
+            if SKIP_ASSET_BACKED_SECURITIES_10K and formObject["companyIndustry"] == "ASSET-BACKED SECURITIES" and formObject["formType"] == "10-K":
+                # ASSET-BACKED SECURITIES omit many sections
+                # Defined in section J: https://www.sec.gov/about/forms/form10-k.pdf
+                raise Exception("Skipping - Company is in the ASSET-BACKED SECURITIES industry which does not have interesting data")
             formObject["companySicCode"] = companyIndustryRaw.group(2).strip()
         else:
             formObject["companyIndustry"] = "Missing_From_SEC_Filing_Header"
@@ -83,11 +104,16 @@ def topFreqCount(counterObj, elements=5):
         elements = len(counterObj)
     return dict(counterObj.most_common(elements))
 
-def analyzeForm(formUrl):
+def analyzeForm(formUrl, dailyCompanyForm):
     formSoup = makeCallReturnSoup(formUrl)
     formData = parseSecHeader(formSoup)
+    # skip times when companies have multiple of the same forms filed on the same day
+    # not sure on the why companies file it this way
+    if SKIP_SAME_COMPANY_SAME_FORM and tuple([formData['companyName'], formData['formType']]) in dailyCompanyForm:
+        raise Exception("Skipping company as same company with the same form type has already been visualized today.")
+    
     for filingDocument in formSoup.find_all('document'):
-        if filingDocument.type.find(text=True, recursive=False).strip() == formData["formType"]:
+        if filingDocument.type.find(text=True, recursive=False).strip() == formData['formType']:
             pageSoup = BeautifulSoup(str(filingDocument),'html.parser')
             pageText = pageSoup.find_all(text=True)
             visibleTexts = filter(tagVisible, pageText)
@@ -99,6 +125,7 @@ def analyzeForm(formUrl):
     formData["wordCounts"] = cleanedCounter
     formData["totalWordsCleaned"] = sum(cleanedCounter.values())
     formData["topWords"] = topFreqCount(cleanedCounter)
+    formData["formUrl"] = formUrl
     #formatted to be filename friendly
     formData["currentDatetime"] = datetime.now().strftime("%Y%m%d-%H%M%S")
     return formData
@@ -130,12 +157,12 @@ def createWordCloud(filingData, outImgPath=OUT_IMG_PATH):
     except Exception as e:
         print("Uh oh - something bad happened when trying to make the wordcloud: ", e)
 
-def filingDataFileName(filingData,outFilingPath=OUT_FILING_PATH):
+def createFilingDataFileName(filingData,outFilingPath=OUT_FILING_PATH):
     return f"{outFilingPath}{filingData['companyName'].replace(' ', '')}_{filingData['formType']}_{filingData['currentDatetime']}.json"
 
 def saveFilingData(filingData,outFilingPath=OUT_FILING_PATH):
     try:
-        with open(filingDataFileName(filingData,outFilingPath), 'w') as f: 
+        with open(createFilingDataFileName(filingData,outFilingPath), 'w') as f: 
             json.dump(filingData, f) 
     except Exception as e:
         print("Uh oh: - something bad happened when trying to save filingData to disk: ", e)
@@ -161,5 +188,5 @@ def generateTemplate(filingData, templateFile=MARKDOWN_FILE, outFilingPath=OUT_M
     )
     env.filters['formatStringTime'] = formatStringTime
     markdownTemplate = env.get_template(templateFile)
-    renderedTemplate = markdownTemplate.render(filingData, IMAGE_FILE=createWordCloudFileName(filingData,outFilingPath=""), NUM_UTILIZED_WORDS=MAX_WORDS_IN_CLOUD)
+    renderedTemplate = markdownTemplate.render(filingData, IMAGE_FILE=createWordCloudFileName(filingData,outFilingPath=""), DATA_FILE=createFilingDataFileName(filingData,outFilingPath=""), NUM_UTILIZED_WORDS=MAX_WORDS_IN_CLOUD)
     saveMarkdownFile(renderedTemplate, filingData, outFilingPath=outFilingPath)

@@ -12,3 +12,6 @@ forms: "{{formType}}"
 Top Words:
 {% for key, value in topWords.items() %}{{loop.index}}. {{key}} - {{value}} instances
 {% endfor %}
+
+See the parsed data used in the visualization [here]({{ '{{' }}< staticlink name={{DATA_FILE}} >{{ '}}' }}).  
+View the actual filing on the SEC website [here]({{formUrl}})
