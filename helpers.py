@@ -77,7 +77,7 @@ def parseSecHeader(soup):
     try:
         formObject = {}
         secHeaderText = soup.find('sec-header').text
-        formObject["companyName"]  = re.search("COMPANY CONFORMED NAME:(.*)",secHeaderText).group(1).strip()
+        formObject["companyName"]  = re.sub(r"[$\\.,@&]","",re.search("COMPANY CONFORMED NAME:(.*)",secHeaderText).group(1).strip())
         formObject["formType"] = re.search("FORM TYPE:(.*)", secHeaderText).group(1).strip()
         companyIndustryRaw = re.search("STANDARD INDUSTRIAL CLASSIFICATION:(.*)(\[.*)", secHeaderText)
         if companyIndustryRaw:
@@ -104,12 +104,12 @@ def topFreqCount(counterObj, elements=5):
         elements = len(counterObj)
     return dict(counterObj.most_common(elements))
 
-def analyzeForm(formUrl, dailyCompanyForm):
+def analyzeForm(formUrl, dailyCompanyForms):
     formSoup = makeCallReturnSoup(formUrl)
     formData = parseSecHeader(formSoup)
     # skip times when companies have multiple of the same forms filed on the same day
     # not sure on the why companies file it this way
-    if SKIP_SAME_COMPANY_SAME_FORM and tuple([formData['companyName'], formData['formType']]) in dailyCompanyForm:
+    if SKIP_SAME_COMPANY_SAME_FORM and tuple([formData['companyName'], formData['formType']]) in dailyCompanyForms:
         raise Exception("Skipping company as same company with the same form type has already been visualized today.")
     
     for filingDocument in formSoup.find_all('document'):
