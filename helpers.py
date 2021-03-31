@@ -32,7 +32,7 @@ SKIP_SAME_COMPANY_SAME_FORM = True
 
 OUT_IMG_PATH = os.getenv("WORD_CLOUD_OUTPUT_PATH","./generatedImages/")
 OUT_FILING_PATH = os.getenv("OUT_FILING_PATH","./filingData/")
-OUT_MARKDOWN_PATH = os.getenv("OUT_FILING_PATH","./markdown/")
+OUT_MARKDOWN_PATH = os.getenv("OUT_MARKDOWN_PATH","./markdown/")
 MARKDOWN_FILE = os.getenv("MARKDOWN_FILE","postMarkdown.j2")
 
 def makeCall(url):
