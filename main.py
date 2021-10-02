@@ -7,7 +7,7 @@ from os import getenv
 START_TIME = time.perf_counter()
 # Number of visualizations to create on a daily run
 # There seems to be ~100 daily between the form types which seem excessive
-DAILY_LIMIT = int(getenv("DAILY_LIMIT","10"))
+DAILY_LIMIT = int(getenv("DAILY_LIMIT","1"))
 
 #makes call to the url provided, and returns soup with lxml parser
 secIndexSoup = helpers.getDailySoup()
@@ -20,6 +20,7 @@ formListIndex, processedForms = 0, []
 # stop when processed the daily limit or stop there are not more forms to analyze
 while len(processedForms) <  DAILY_LIMIT and formListIndex < len(dailyForms):
     try:
+        time.sleep(.5)
         formUrl = dailyForms[formListIndex]
         formListIndex += 1
         filingData = helpers.analyzeForm(formUrl, processedForms)

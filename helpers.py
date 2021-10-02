@@ -36,7 +36,10 @@ OUT_MARKDOWN_PATH = os.getenv("OUT_MARKDOWN_PATH","./markdown/")
 MARKDOWN_FILE = os.getenv("MARKDOWN_FILE","postMarkdown.j2")
 
 def makeCall(url):
-    r = requests.get(url)
+    headers = {
+    'User-Agent': 'Friendly Software Engineer Visualizing Data for Fun'
+    }
+    r = requests.get(url, headers=headers)
     return r.content
 
 def makeSoup(content,parserType="lxml"):
@@ -106,6 +109,7 @@ def topFreqCount(counterObj, elements=5):
 
 def analyzeForm(formUrl, dailyCompanyForms):
     formSoup = makeCallReturnSoup(formUrl)
+    print(formSoup)
     formData = parseSecHeader(formSoup)
     # skip times when companies have multiple of the same forms filed on the same day
     # not sure on the why companies file it this way
