@@ -4,3 +4,4 @@ requests==2.25.1
 wordcloud==1.8.1
 jinja2==2.11.3
 lxml==4.6.3
+markupsafe==2.0.1
