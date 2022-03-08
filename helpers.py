@@ -109,7 +109,7 @@ def topFreqCount(counterObj, elements=5):
 
 def analyzeForm(formUrl, dailyCompanyForms):
     formSoup = makeCallReturnSoup(formUrl)
-    print(formSoup)
+    # print(formSoup)
     formData = parseSecHeader(formSoup)
     # skip times when companies have multiple of the same forms filed on the same day
     # not sure on the why companies file it this way
